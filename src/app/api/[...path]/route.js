@@ -338,10 +338,16 @@ async function handleRequest(request, { params }) {
 
       // ── Embed ──
       case 'embed': {
-        const { showId, episodeString, translationType = 'sub' } = getQuery(request);
+        const { showId, episodeString, translationType = 'sub', format } = getQuery(request);
         if (!showId || !episodeString) {
           return json({ error: 'showId and episodeString are required' }, 400);
         }
+
+        if (format === 'manga') {
+          const watchUrl = api.generateMangaWatchUrl(showId, episodeString, translationType);
+          return json({ embedUrl: watchUrl, watchUrl }, 200, TTL.CATEGORIES);
+        }
+
         const embedUrl = api.generateEmbedUrl(showId, episodeString, translationType);
         const watchUrl = api.generateWatchUrl(showId, episodeString, translationType);
         return json({ embedUrl, watchUrl }, 200, TTL.CATEGORIES);

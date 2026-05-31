@@ -7,6 +7,7 @@ const { decryptTobeparsed, parseSources, parseJsonSources } = await import('./de
 const API_URL = 'https://api.allanime.day/api';
 const EMBED_BASE = 'https://allanime.day/embed';
 const WATCH_BASE = 'https://mkissa.to/anime';
+const MANGA_BASE = 'https://mkissa.to/manga';
 
 // Referrer that bypasses CAPTCHA (per ani-cli reverse engineering)
 const ALLANIME_REFR = 'https://youtu-chan.com';
@@ -1216,6 +1217,14 @@ function generateWatchUrl(showId, episodeString, translationType = 'sub') {
 }
 
 /**
+ * Generate the mkissa.to manga direct watch page URL.
+ * Format: https://mkissa.to/manga/{mangaId}/chapter-{chapterString}-{translationType}
+ */
+function generateMangaWatchUrl(mangaId, chapterString, translationType = 'sub') {
+  return `${MANGA_BASE}/${mangaId}/chapter-${chapterString}-${translationType}`;
+}
+
+/**
  * Full search using the shows query with comprehensive filtering.
  * Accepts tr (translationType), cty (countryOrigin), sortBy, sortDirection, page, limit.
  * Returns results in anyCards format compatible with frontend SearchResult.
@@ -1288,4 +1297,5 @@ export {
   // Utility
   generateEmbedUrl,
   generateWatchUrl,
+  generateMangaWatchUrl,
 };
