@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios from 'axios';
+import { get, set, cacheKey, TTL } from './cache.js';
 
 const { decryptTobeparsed, parseSources, parseJsonSources } = await import('./decrypt.js');
 
@@ -22,9 +23,54 @@ const DEFAULT_HEADERS = {
 const EPISODE_SOURCE_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
 /**
+ * Map GraphQL query names to their appropriate cache TTL.
+ */
+function ttlForQuery(query) {
+  const nameMatch = query.match(/query\s+(\w+)/);
+  const name = nameMatch ? nameMatch[1] : '';
+  const map = {
+    Shows:                TTL.SHOWS,
+    Show:                 TTL.SHOW,
+    Episodes:             TTL.EPISODES,
+    Episode:              TTL.EPISODE,
+    EpisodeInfos:         TTL.EPISODES,
+    FastSearch:           TTL.SEARCH,
+    Mangas:               TTL.SHOWS,
+    Manga:                TTL.SHOW,
+    Chapters:             TTL.EPISODES,
+    ChapterPages:         TTL.EPISODES,
+    QueryPopular:         TTL.POPULAR,
+    QueryRecommendation:  TTL.RECOMMEND,
+    QueryRandomRecommendation: TTL.RECOMMEND,
+    Characters:           TTL.CHARACTERS,
+    QueryTags:            TTL.TAGS,
+    Musics:               TTL.MUSIC,
+    QueryComments:        TTL.COMMENTS,
+    QueryReviews:         TTL.REVIEWS,
+    WatchState:           TTL.WATCH_STATE,
+    ShowsWithIds:         TTL.SHOWS,
+    ShowsWithPlaylistId:  TTL.PLAYLISTS,
+    SearchShows:          TTL.SEARCH,
+    SearchMangas:         TTL.SEARCH,
+  };
+  return map[name] ?? TTL.DEFAULT;
+}
+
+/**
  * Execute a GraphQL query against the AllAnime API.
+ * Results are cached in memory so repeated calls for the same data
+ * don't hit the upstream API.
  */
 async function graphql(query, variables = {}) {
+  const key = cacheKey(query, variables);
+  const ttlSeconds = ttlForQuery(query);
+
+  // Check in-memory cache first
+  const cached = get(key);
+  if (cached !== null) {
+    return cached;
+  }
+
   try {
     const response = await axios.post(
       API_URL,
@@ -38,7 +84,12 @@ async function graphql(query, variables = {}) {
       );
     }
 
-    return response.data.data;
+    const data = response.data.data;
+
+    // Store in cache for future requests
+    set(key, data, ttlSeconds);
+
+    return data;
   } catch (error) {
     if (error.response) {
       throw new Error(`API error ${error.response.status}: ${JSON.stringify(error.response.data)}`);
@@ -331,6 +382,13 @@ async function episodeInfos(showId, episodeNumStart, episodeNumEnd) {
  * Uses the correct referrer (youtu-chan.com) and decrypts the response.
  * Based on the ani-cli reverse engineering.
  */
+/**
+ * Cache for episode direct sources (separate from the graphql cache
+ * because this uses a different API path / hash-based query).
+ */
+const sourcesCache = new Map();
+const SOURCES_CACHE_TTL = TTL.STREAMS * 1000;
+
 async function episodeDirectSources(showId, episodeString, translationType = 'sub') {
   const variables = {
     showId,
@@ -351,6 +409,20 @@ async function episodeDirectSources(showId, episodeString, translationType = 'su
     'Referer': ALLANIME_REFR,
   };
 
+  const sourcesKey = `${showId}:${episodeString}:${translationType}`;
+
+  // Check cache for sources before making any network call
+  const cached = sourcesCache.get(sourcesKey);
+  if (cached && Date.now() < cached.expires) {
+    return cached.data;
+  }
+
+  // Helper to store result in cache
+  function cacheResult(result) {
+    sourcesCache.set(sourcesKey, { data: result, expires: Date.now() + SOURCES_CACHE_TTL });
+    return result;
+  }
+
   // Try GET with persisted query first
   try {
     const params = new URLSearchParams({
@@ -364,24 +436,21 @@ async function episodeDirectSources(showId, episodeString, translationType = 'su
     });
 
     const data = response.data;
-    
+
     // AllAnime API returns encrypted data in a flat structure:
     // { data: { _m: "b7", tobeparsed: "base64..." } }
     // The tobeparsed field contains encrypted source URL data.
     if (data && data.data && data.data.tobeparsed) {
       const b64data = data.data.tobeparsed;
-      // Prepend "tobeparsed" so the decrypt function recognizes the format
       const encryptedPayload = 'tobeparsed' + b64data;
       const decrypted = decryptTobeparsed(encryptedPayload);
-      
+
       if (decrypted && typeof decrypted === 'string' && decrypted !== encryptedPayload) {
-        // Try parsing as JSON first (new format)
         let sources = parseJsonSources(decrypted);
         if (sources.length === 0) {
-          // Fall back to legacy format
           sources = parseSources(decrypted);
         }
-        return { episodeString, sources };
+        return cacheResult({ episodeString, sources });
       }
     }
   } catch (e) {
@@ -412,25 +481,27 @@ async function episodeDirectSources(showId, episodeString, translationType = 'su
     );
 
     const data = response.data;
-    
+
     if (data && data.data && data.data.tobeparsed) {
       const b64data = data.data.tobeparsed;
       const encryptedPayload = 'tobeparsed' + b64data;
       const decrypted = decryptTobeparsed(encryptedPayload);
-      
+
       if (decrypted && typeof decrypted === 'string' && decrypted !== encryptedPayload) {
         let sources = parseJsonSources(decrypted);
         if (sources.length === 0) {
           sources = parseSources(decrypted);
         }
-        return { episodeString, sources };
+        return cacheResult({ episodeString, sources });
       }
     }
   } catch (e) {
     throw new Error(`Failed to fetch episode sources: ${e.message}`);
   }
 
-  return { episodeString, sources: [] };
+  const emptyResult = { episodeString, sources: [] };
+  sourcesCache.set(sourcesKey, { data: emptyResult, expires: Date.now() + 30000 });
+  return emptyResult;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as api from '../../../lib/api-server.js';
+import { TTL } from '../../../lib/cache.js';
 
 // ============================================================
 // Route dispatcher — maps URL path patterns to API functions
@@ -18,15 +19,28 @@ function getQuery(request) {
 }
 
 /**
- * Create a JSON response with proper caching headers.
+ * Build a Cache-Control header value for CDN / browser caching.
+ * - `public`      — any cache may store
+ * - `s-maxage`    — shared (CDN) max age in seconds
+ * - `stale-while-revalidate` — serve stale while re-fetching in background
  */
-function json(data, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      'Cache-Control': 'no-store, must-revalidate',
-    },
-  });
+function cacheControl(ttlSeconds) {
+  return `public, s-maxage=${ttlSeconds}, stale-while-revalidate=${Math.floor(ttlSeconds / 2)}`;
+}
+
+/**
+ * Create a JSON response with CDN-friendly caching headers.
+ */
+function json(data, status = 200, ttlSeconds = null) {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  if (ttlSeconds !== null && ttlSeconds > 0) {
+    headers['Cache-Control'] = cacheControl(ttlSeconds);
+  } else {
+    headers['Cache-Control'] = 'no-store, must-revalidate';
+  }
+  return NextResponse.json(data, { status, headers });
 }
 
 /**
@@ -67,7 +81,7 @@ async function handleShows(request, segments, method) {
     const { translationType = 'sub' } = getQuery(request);
     try {
       const data = await api.episodeWithSources(showId, episodeString, translationType);
-      return json(data);
+      return json(data, 200, TTL.STREAMS);
     } catch (err) {
       return errorResponse(err);
     }
@@ -82,7 +96,7 @@ async function handleShows(request, segments, method) {
     }
     try {
       const data = await api.episodeInfos(showId, parseInt(episodeNumStart), parseInt(episodeNumEnd));
-      return json(data);
+      return json(data, 200, TTL.EPISODES);
     } catch (err) {
       return errorResponse(err);
     }
@@ -95,7 +109,7 @@ async function handleShows(request, segments, method) {
     const { translationType = 'sub' } = getQuery(request);
     try {
       const data = await api.episodeInfo(showId, episodeString, translationType);
-      return json(data);
+      return json(data, 200, TTL.EPISODE);
     } catch (err) {
       return errorResponse(err);
     }
@@ -108,7 +122,7 @@ async function handleShows(request, segments, method) {
     const { translationType = 'sub' } = getQuery(request);
     try {
       const data = await api.episode(showId, episodeString, translationType);
-      return json(data);
+      return json(data, 200, TTL.EPISODE);
     } catch (err) {
       return errorResponse(err);
     }
@@ -124,7 +138,7 @@ async function handleShows(request, segments, method) {
         episodeNumStart: episodeNumStart ? parseInt(episodeNumStart) : undefined,
         episodeNumEnd: episodeNumEnd ? parseInt(episodeNumEnd) : undefined,
       });
-      return json(data);
+      return json(data, 200, TTL.EPISODES);
     } catch (err) {
       return errorResponse(err);
     }
@@ -135,7 +149,7 @@ async function handleShows(request, segments, method) {
     const showId = segments[1];
     try {
       const data = await api.show(showId);
-      return json(data);
+      return json(data, 200, TTL.SHOW);
     } catch (err) {
       return errorResponse(err);
     }
@@ -162,7 +176,7 @@ async function handleShows(request, segments, method) {
         countryOrigin: query.countryOrigin,
         search: Object.keys(search).length > 0 ? search : undefined,
       });
-      return json(data);
+      return json(data, 200, TTL.SHOWS);
     } catch (err) {
       return errorResponse(err);
     }
@@ -181,7 +195,7 @@ async function handleMangas(request, segments) {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
       });
-      return json(data);
+      return json(data, 200, TTL.EPISODES);
     } catch (err) {
       return errorResponse(err);
     }
@@ -192,7 +206,7 @@ async function handleMangas(request, segments) {
     const mangaId = segments[1];
     try {
       const data = await api.manga(mangaId);
-      return json(data);
+      return json(data, 200, TTL.SHOW);
     } catch (err) {
       return errorResponse(err);
     }
@@ -214,7 +228,7 @@ async function handleMangas(request, segments) {
         countryOrigin: query.countryOrigin,
         search: Object.keys(search).length > 0 ? search : undefined,
       });
-      return json(data);
+      return json(data, 200, TTL.SHOWS);
     } catch (err) {
       return errorResponse(err);
     }
@@ -229,7 +243,7 @@ async function handleChapters(request, segments) {
     const chapterId = segments[1];
     try {
       const data = await api.chapterPages(chapterId);
-      return json(data);
+      return json(data, 200, TTL.EPISODES);
     } catch (err) {
       return errorResponse(err);
     }
@@ -244,7 +258,7 @@ async function handleWatchState(request, segments) {
     const showId = segments[1];
     try {
       const data = await api.watchState(showId);
-      return json(data);
+      return json(data, 200, TTL.WATCH_STATE);
     } catch (err) {
       return errorResponse(err);
     }
@@ -263,7 +277,7 @@ async function handlePlaylists(request, segments) {
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
       });
-      return json(data);
+      return json(data, 200, TTL.PLAYLISTS);
     } catch (err) {
       return errorResponse(err);
     }
@@ -307,7 +321,7 @@ async function handleRequest(request, { params }) {
           page: query.page ? parseInt(query.page, 10) : 1,
           limit: query.limit ? parseInt(query.limit, 10) : 40,
         });
-        return json(data);
+        return json(data, 200, TTL.SEARCH);
       }
 
       // ── Embed ──
@@ -318,14 +332,14 @@ async function handleRequest(request, { params }) {
         }
         const embedUrl = api.generateEmbedUrl(showId, episodeString, translationType);
         const watchUrl = api.generateWatchUrl(showId, episodeString, translationType);
-        return json({ embedUrl, watchUrl });
+        return json({ embedUrl, watchUrl }, 200, TTL.CATEGORIES);
       }
 
       // ── Popular ──
       case 'popular': {
         const { type = 'ANIME', size = '20' } = getQuery(request);
         const data = await api.queryPopular(type, { size: parseInt(size, 10) });
-        return json(data);
+        return json(data, 200, TTL.POPULAR);
       }
 
       // ── Recommendations ──
@@ -337,14 +351,14 @@ async function handleRequest(request, { params }) {
           page: parseInt(qRec.page || '1', 10),
           pageType: qRec.pageType || 'ep_cp',
         });
-        return json(data);
+        return json(data, 200, TTL.RECOMMEND);
       }
 
       // ── Random Recommendations ──
       case 'random-recommendations': {
         const { format = 'anime' } = getQuery(request);
         const data = await api.queryRandomRecommendation(format);
-        return json(data);
+        return json(data, 200, TTL.RECOMMEND);
       }
 
       // ── Mangas ──
@@ -363,7 +377,7 @@ async function handleRequest(request, { params }) {
         if (charQuery.limit) search.limit = parseInt(charQuery.limit, 10);
         if (charQuery.page) search.page = parseInt(charQuery.page, 10);
         const data = await api.characters(search);
-        return json(data);
+        return json(data, 200, TTL.CHARACTERS);
       }
 
       // ── Tags ──
@@ -375,7 +389,7 @@ async function handleRequest(request, { params }) {
         if (tagQuery.page) tagSearch.page = parseInt(tagQuery.page, 10);
         if (tagQuery.limit) tagSearch.limit = parseInt(tagQuery.limit, 10);
         const data = await api.queryTags(tagSearch);
-        return json(data);
+        return json(data, 200, TTL.TAGS);
       }
 
       // ── Music ──
@@ -389,7 +403,7 @@ async function handleRequest(request, { params }) {
           page: parseInt(musicQuery.page || '1', 10),
           limit: parseInt(musicQuery.limit || '20', 10),
         });
-        return json(data);
+        return json(data, 200, TTL.MUSIC);
       }
 
       // ── Comments ──
@@ -403,7 +417,7 @@ async function handleRequest(request, { params }) {
           page: parseInt(commQuery.page || '1', 10),
           limit: parseInt(commQuery.limit || '20', 10),
         });
-        return json(data);
+        return json(data, 200, TTL.COMMENTS);
       }
 
       // ── Reviews ──
@@ -417,7 +431,7 @@ async function handleRequest(request, { params }) {
           page: parseInt(revQuery.page || '1', 10),
           limit: parseInt(revQuery.limit || '20', 10),
         });
-        return json(data);
+        return json(data, 200, TTL.REVIEWS);
       }
 
       // ── Watch State ──
@@ -439,7 +453,7 @@ async function handleRequest(request, { params }) {
           'Police', 'Space', 'Super Power', 'Vampire', 'Demons', 'Game',
           'Kids', 'Cars', 'Samurai', 'Cooking', 'Dementia', 'Gods',
         ];
-        return json({ genres });
+        return json({ genres }, 200, TTL.GENRES);
       }
 
       // ── Categories ──
@@ -450,7 +464,7 @@ async function handleRequest(request, { params }) {
           seasons: ['WINTER', 'SPRING', 'SUMMER', 'FALL'],
           countries: ['ALL', 'JP', 'CN', 'KR', 'OTHER'],
           translationTypes: ['sub', 'dub', 'raw'],
-        });
+        }, 200, TTL.CATEGORIES);
       }
 
       // ── Health ──
