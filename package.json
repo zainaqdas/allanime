@@ -1,0 +1,27 @@
+{
+  "name": "allanime-scraper-api",
+  "version": "1.0.0",
+  "description": "Node.js scraper API for mkissa.to / allanime.day - anime and manga discovery hub",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:api\" \"npm run start:frontend\"",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+    "start:api": "PORT=3001 node src/index.js",
+    "dev:api": "PORT=3001 node --watch src/index.js",
+    "start:frontend": "cd frontend && npm run start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "install:all": "npm install && cd frontend && npm install"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "hls.js": "^1.6.16",
+    "playwright": "^1.60.0",
+    "puppeteer-core": "^25.1.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}
