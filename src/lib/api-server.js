@@ -727,11 +727,12 @@ async function mangas({ page = 1, limit = 20, translationType, countryOrigin, se
   if (translationType) variables.translationType = translationType.toLowerCase();
   if (countryOrigin) variables.countryOrigin = countryOrigin.toUpperCase();
   if (search) {
+    // SortBy is a GraphQL enum — pass as-is, strip any sortDirection field
+    delete search.sortDirection;
+    // Backward compat: if sortBy is still { property, order } object, extract property
     if (search.sortBy && typeof search.sortBy === 'object') {
-      search.sortDirection = (search.sortBy.order === 'DESC' || search.sortBy.order === 'DSC') ? 'DSC' : 'ASC';
       search.sortBy = search.sortBy.property;
     }
-    // Also pass search to variables for mangas
     variables.search = search;
   }
 

@@ -201,7 +201,7 @@ async function handleMangas(request, segments) {
   if (segments.length === 1) {
     const query = getQuery(request);
     const search = {};
-    if (query.sortBy) search.sortBy = { property: query.sortBy.toUpperCase(), order: (query.sortOrder || 'DESC').toUpperCase() };
+    if (query.sortBy) search.sortBy = query.sortBy;
     if (query.genres) search.genres = query.genres.split(',').map(g => g.trim());
     if (query.query) search.query = query.query;
 
@@ -304,7 +304,7 @@ async function handleRequest(request, { params }) {
         // If format=manga, search mangas instead of anime
         if (query.format === 'manga') {
           const searchParams = {};
-          if (query.sortBy) searchParams.sortBy = { property: query.sortBy.toUpperCase(), order: (query.sortOrder || 'DESC').toUpperCase() };
+          if (query.sortBy) searchParams.sortBy = query.sortBy;
           searchParams.query = query.q;
 
           const data = await api.mangas({
