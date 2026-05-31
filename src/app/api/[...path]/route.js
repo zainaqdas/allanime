@@ -300,6 +300,30 @@ async function handleRequest(request, { params }) {
         if (!query.q) {
           return json({ error: 'query parameter "q" is required' }, 400);
         }
+
+        // If format=manga, search mangas instead of anime
+        if (query.format === 'manga') {
+          const searchParams = {};
+          if (query.sortBy) searchParams.sortBy = { property: query.sortBy.toUpperCase(), order: (query.sortOrder || 'DESC').toUpperCase() };
+          searchParams.query = query.q;
+
+          const data = await api.mangas({
+            page: query.page ? parseInt(query.page, 10) : 1,
+            limit: query.limit ? parseInt(query.limit, 10) : 40,
+            translationType: query.tr,
+            countryOrigin: query.cty,
+            search: searchParams,
+          });
+
+          // Convert MangasResponse to SearchResult shape
+          const anyCards = (data.edges || []).map(e => ({
+            ...e,
+            format: 'manga',
+          }));
+
+          return json({ anyCards, pageInfo: data.pageInfo }, 200, TTL.SEARCH);
+        }
+
         const data = await api.searchAnime({
           query: query.q,
           tr: query.tr,

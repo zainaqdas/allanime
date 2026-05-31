@@ -130,6 +130,7 @@ export interface SearchParams {
   sortDirection?: string;
   page?: number;
   limit?: number;
+  format?: string;
 }
 
 export async function fetchSearch(query: string, params?: SearchParams): Promise<SearchResult> {
@@ -140,6 +141,7 @@ export async function fetchSearch(query: string, params?: SearchParams): Promise
   if (params?.sortDirection) qs.set('sortDirection', params.sortDirection);
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.format) qs.set('format', params.format);
   return fetchJSON<SearchResult>(`/search?${qs}`);
 }
 

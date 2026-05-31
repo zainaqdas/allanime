@@ -3,15 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { fetchShows, fetchPopular, fetchSearch } from '@/lib/api';
+import { fetchShows, fetchMangas, fetchPopular, fetchSearch } from '@/lib/api';
 import { useContinueWatching } from '@/lib/useContinueWatching';
 import ShowCard from '@/components/ShowCard';
-import type { Show, SearchCard } from '@/types';
+import type { Show, SearchCard, Manga } from '@/types';
 
 const SHOWS_PER_PAGE = 20;
 
-/** Normalize a search card (from fast search) to a Show-like shape for ShowCard */
+/** Normalize a search card to a Show-like shape for ShowCard */
 function cardToShow(card: SearchCard): Show {
+  const isManga = card.format === 'manga';
   return {
     _id: card._id,
     name: card.name,
@@ -20,13 +21,33 @@ function cardToShow(card: SearchCard): Show {
     type: card.type,
     status: card.status,
     genres: card.genres,
-    episodeCount: card.episodeCount || card.availableEpisodesDetail?.sub?.length,
-    availableEpisodesDetail: card.availableEpisodesDetail,
+    episodeCount: isManga
+      ? (card.chapterCount || card.availableChaptersDetail?.sub?.length)
+      : (card.episodeCount || card.availableEpisodesDetail?.sub?.length),
+    availableEpisodesDetail: isManga
+      ? (card.availableChaptersDetail as Record<string, string[]>)
+      : card.availableEpisodesDetail,
     score: card.score != null && typeof card.score === 'number'
       ? { averageScore: card.score * 10 }
       : typeof card.score === 'object' && card.score !== null
         ? card.score as { averageScore?: number }
         : undefined,
+  };
+}
+
+/** Normalize a Manga API object to a Show-like shape for ShowCard */
+function mangaToShow(manga: Manga): Show {
+  return {
+    _id: manga._id,
+    name: manga.name,
+    englishName: manga.englishName,
+    thumbnail: manga.thumbnail,
+    type: manga.type,
+    status: manga.status,
+    genres: manga.genres,
+    episodeCount: manga.chapterCount || manga.availableChaptersDetail?.sub?.length || 0,
+    availableEpisodesDetail: manga.availableChaptersDetail as Record<string, string[]>,
+    score: manga.score,
   };
 }
 
@@ -45,16 +66,28 @@ export default function HomePageContent() {
   const [tr, setTr] = useState('sub');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [sortBy, setSortBy] = useState('Trending');
+  const [contentType, setContentType] = useState<'anime' | 'manga'>('anime');
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
 
-  const genres = [
+  const animeGenres = [
     'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
     'Isekai', 'Magic', 'Mecha', 'Music', 'Mystery', 'Psychological',
     'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural',
     'Thriller', 'Shounen', 'Historical', 'Martial Arts', 'School', 'Military',
   ];
+
+  const mangaGenres = [
+    'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
+    'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural',
+    'Thriller', 'Mystery', 'Psychological',
+    'Shounen', 'Shoujo', 'Seinen', 'Josei',
+    'Historical', 'Martial Arts', 'School', 'Military',
+    'Ecchi', 'Harem', 'Isekai',
+  ];
+
+  const genres = contentType === 'manga' ? mangaGenres : animeGenres;
 
   const sortOptions = [
     { value: 'Trending', label: 'Trending' },
@@ -88,20 +121,32 @@ export default function HomePageContent() {
     try {
       if (query) {
         const data = await fetchSearch(query, {
-          tr,
+          tr: contentType === 'anime' ? tr : undefined,
           cty: 'ALL',
           sortBy: 'Latest_Update',
           sortDirection: '-1',
           page,
           limit: SHOWS_PER_PAGE,
+          format: contentType === 'manga' ? 'manga' : undefined,
         });
         const results = (data.anyCards || [])
-          .filter(c => c.format !== 'manga')
+          .filter(c => contentType === 'anime' ? c.format !== 'manga' : c.format === 'manga')
           .map(cardToShow);
         setShows(prev => append ? [...prev, ...results] : results);
         const hasNext = data.pageInfo?.hasNextPage;
         setHasMore(!!hasNext);
         if (!append) setTotal(results.length);
+      } else if (contentType === 'manga') {
+        const params: any = { page, limit: SHOWS_PER_PAGE, sortBy };
+        if (selectedGenre) params.genres = selectedGenre;
+        const data = await fetchMangas(params);
+        const edges = (data.edges || []).map(mangaToShow);
+        setShows(prev => append ? [...prev, ...edges] : edges);
+        const apiTotal = data.pageInfo?.total;
+        if (apiTotal != null && apiTotal > 0 && !append) {
+          setTotal(apiTotal);
+        }
+        setHasMore(data.pageInfo?.hasNextPage ?? false);
       } else {
         const params: any = { page, limit: SHOWS_PER_PAGE, sortBy };
         if (selectedGenre) params.genres = selectedGenre;
@@ -124,21 +169,17 @@ export default function HomePageContent() {
       setLoadingMore(false);
       loadingMoreRef.current = false;
     }
-  }, [page, query, tr, selectedGenre, sortBy]);
+  }, [page, query, tr, selectedGenre, sortBy, contentType]);
 
-  // Load initial data
+  // Load initial data and re-load when filters or content type change
   useEffect(() => {
     loadShows(false);
-    fetchPopular('ANIME', 12).then((d) => {
+    const popularType = contentType === 'manga' ? 'MANGA' : 'ANIME';
+    fetchPopular(popularType, 12).then((d) => {
       const cards = d.recommendations?.map((r: any) => r.anyCard).filter(Boolean) || [];
       setTrendingShows(cards.map(cardToShow));
     }).catch(() => {});
-  }, []);
-
-  // Re-load when page, query, or filters change — always start from page 1
-  useEffect(() => {
-    loadShows(false);
-  }, [query, tr, selectedGenre, sortBy]);
+  }, [query, tr, selectedGenre, sortBy, contentType]);
 
   // Infinite scroll: observe sentinel and load next page
   // Uses loadingMoreRef to prevent duplicate page increments (IntersectionObserver
@@ -171,8 +212,32 @@ export default function HomePageContent() {
 
   return (
     <div className="py-8">
-      {/* Continue Watching */}
-      {!query && continueWatching.length > 0 && (
+      {/* Content Type Toggle */}
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => { setContentType('anime'); setPage(1); setSelectedGenre(''); }}
+          className={`px-5 py-2 text-sm font-bold rounded-xl transition-all duration-200 ${
+            contentType === 'anime'
+              ? 'bg-gradient-to-r from-accent-1 to-accent-2 text-white shadow-md shadow-accent-glow/30'
+              : 'bg-bg-card border border-border text-text-muted hover:text-text-secondary hover:border-accent-1'
+          }`}
+        >
+          🎬 Anime
+        </button>
+        <button
+          onClick={() => { setContentType('manga'); setPage(1); setSelectedGenre(''); }}
+          className={`px-5 py-2 text-sm font-bold rounded-xl transition-all duration-200 ${
+            contentType === 'manga'
+              ? 'bg-gradient-to-r from-accent-1 to-accent-2 text-white shadow-md shadow-accent-glow/30'
+              : 'bg-bg-card border border-border text-text-muted hover:text-text-secondary hover:border-accent-1'
+          }`}
+        >
+          📖 Manga
+        </button>
+      </div>
+
+      {/* Continue Watching — only for anime */}
+      {!query && contentType === 'anime' && continueWatching.length > 0 && (
         <section className="mb-10">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-2xl font-extrabold tracking-tight">Continue Watching</h2>
@@ -216,12 +281,14 @@ export default function HomePageContent() {
       {!query && trendingShows.length > 0 && (
         <section className="mb-10">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-2xl font-extrabold tracking-tight">Trending Now</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">
+              {contentType === 'manga' ? 'Trending Manga' : 'Trending Now'}
+            </h2>
           </div>
           <div className="flex gap-4 overflow-x-auto pb-2 -mx-6 px-6 snap-x snap-mandatory scrollbar-none">
             {trendingShows.slice(0, 10).map((show: Show) => (
               <div key={show._id} className="snap-start shrink-0 w-[160px]">
-                <ShowCard show={show} />
+                <ShowCard show={show} format={contentType} />
               </div>
             ))}
           </div>
@@ -231,10 +298,12 @@ export default function HomePageContent() {
       {/* Title bar */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-extrabold tracking-tight">
-          {query ? `Results for "${query}"` : 'Browse Anime'}
+          {query
+            ? `Results for "${query}"`
+            : contentType === 'manga' ? 'Browse Manga' : 'Browse Anime'}
         </h1>
 
-        {query && (
+        {query && contentType === 'anime' && (
           <div className="flex items-center gap-1.5 ml-auto bg-bg-card border border-border rounded-xl p-1">
             <button
               onClick={() => { setTr('sub'); setPage(1); }}
@@ -331,7 +400,9 @@ export default function HomePageContent() {
       ) : error ? (
         <div className="text-center py-20 text-text-muted">
           <div className="text-5xl mb-4">⚠️</div>
-          <h3 className="text-xl text-text-secondary font-semibold mb-2">Failed to load shows</h3>
+          <h3 className="text-xl text-text-secondary font-semibold mb-2">
+            Failed to load {contentType === 'manga' ? 'manga' : 'shows'}
+          </h3>
           <p className="text-sm mb-4">{error}</p>
           <button onClick={() => loadShows(false)} className="px-5 py-2.5 bg-gradient-to-r from-accent-1 to-accent-2 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-accent-glow/30 transition-all">
             Retry
@@ -339,18 +410,24 @@ export default function HomePageContent() {
         </div>
       ) : shows.length === 0 ? (
         <div className="text-center py-20 text-text-muted">
-          <div className="text-5xl mb-4">🎬</div>
-          <h3 className="text-xl text-text-secondary font-semibold mb-2">No shows found</h3>
+          <div className={`text-5xl mb-4`}>{contentType === 'manga' ? '📖' : '🎬'}</div>
+          <h3 className="text-xl text-text-secondary font-semibold mb-2">
+            {contentType === 'manga' ? 'No manga found' : 'No shows found'}
+          </h3>
           <p className="text-sm">Try a different search term.</p>
         </div>
       ) : (
         <>
           <div className="text-xs text-text-muted mb-4">
-            {query ? `Page ${page} · ${total} results` : `${total.toLocaleString()} shows found`}
+            {query
+              ? `Page ${page} · ${total} results`
+              : contentType === 'manga'
+                ? `${total.toLocaleString()} manga found`
+                : `${total.toLocaleString()} shows found`}
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
             {shows.map((show) => (
-              <ShowCard key={show._id} show={show} />
+              <ShowCard key={show._id} show={show} format={contentType} />
             ))}
           </div>
           {/* Infinite scroll sentinel + loading indicator */}
