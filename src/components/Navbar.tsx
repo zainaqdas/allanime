@@ -2,28 +2,98 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTheme } from '@/lib/ThemeProvider';
+import { fetchSearch } from '@/lib/api';
+import type { SearchCard } from '@/types';
 
 export default function Navbar() {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchCard[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchRef = useRef<HTMLFormElement>(null);
+  const { theme, toggle: toggleTheme } = useTheme();
+
+  // Debounced search suggestions
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const data = await fetchSearch(trimmed, { limit: 5 });
+        const results = (data.anyCards || []).slice(0, 5);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
       router.push(`/?q=${encodeURIComponent(query.trim())}`);
+      setShowSuggestions(false);
+      setMobileMenuOpen(false);
     }
   }, [query, router]);
 
+  const selectSuggestion = useCallback((card: SearchCard) => {
+    setShowSuggestions(false);
+    setQuery('');
+    if (card.format === 'manga') {
+      router.push(`/manga/${card._id}`);
+    } else {
+      router.push(`/show/${card._id}`);
+    }
+  }, [router]);
+
+  const navLinks = [
+    { href: '/', label: 'Browse' },
+    { href: '/?sortBy=Trending', label: 'Trending' },
+  ];
+
   return (
-    <header className="glass sticky top-0 z-50 px-6 py-4">
-      <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2.5 no-underline shrink-0 group">
+    <header className="glass sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
+      <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-2 md:gap-4">
+        <Link href="/" className="flex items-center gap-2 no-underline shrink-0 group" onClick={() => setMobileMenuOpen(false)}>
           {/* KaiStream logo: Kai the sea dragon mascot */}
-          <div className="relative w-10 h-10 flex items-center justify-center">
+          <div className="relative w-9 h-9 md:w-10 md:h-10 flex items-center justify-center">
             <div className="absolute inset-0 rounded-xl bg-accent-glow/30 blur-md group-hover:bg-accent-glow/50 transition-all duration-300" />
             <svg
-              className="w-10 h-10 relative z-10 group-hover:scale-105 transition-transform duration-300"
+              className="w-9 h-9 md:w-10 md:h-10 relative z-10 group-hover:scale-105 transition-transform duration-300"
               viewBox="0 0 100 100"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -97,35 +167,177 @@ export default function Navbar() {
             </svg>
           </div>
           
-          {/* KaiStream wordmark */}
-          <span className="text-xl font-extrabold tracking-tight">
+          {/* KaiStream wordmark - hidden on smallest screens */}
+          <span className="hidden sm:inline text-lg md:text-xl font-extrabold tracking-tight">
             <span className="text-emerald-400">Kai</span>
             <span className="text-emerald-500">Stream</span>
           </span>
         </Link>
 
-        <form onSubmit={handleSearch} className="flex-1 max-w-[520px] relative">
+        <form onSubmit={handleSearch} ref={searchRef} className="flex-1 max-w-[420px] md:max-w-[520px] relative">
+          {/* Search input */}
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search anime, manga, characters..."
-            className="w-full py-3 pl-12 pr-4 bg-bg-card border border-border rounded-2xl text-text-primary text-sm outline-none transition-all duration-200 focus:border-accent-1 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.3)] placeholder:text-text-muted"
+            onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            placeholder="Search anime or manga..."
+            className="w-full py-2.5 md:py-3 pl-10 md:pl-12 pr-10 bg-bg-card border border-border rounded-xl md:rounded-2xl text-text-primary text-sm outline-none transition-all duration-200 focus:border-accent-1 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.3)] placeholder:text-text-muted"
           />
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-text-muted w-3.5 h-3.5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
+          {/* Clear button (hidden while loading) */}
+          {query && !suggestionsLoading && (
+            <button
+              type="button"
+              onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(false); }}
+              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+
+          {/* Suggestions dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-bg-card border border-border rounded-2xl shadow-2xl overflow-hidden z-50">
+              <div className="py-1">
+                <div className="px-4 py-2 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                  Suggestions
+                </div>
+                {suggestions.map((card) => (
+                  <button
+                    key={card._id}
+                    type="button"
+                    onClick={() => selectSuggestion(card)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-bg-card-hover transition-colors text-left"
+                  >
+                    <div className="w-8 h-11 rounded-lg overflow-hidden bg-bg-secondary shrink-0">
+                      {card.thumbnail ? (
+                        <img src={card.thumbnail} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-text-muted">
+                          {card.format === 'manga' ? '📕' : '🎬'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">
+                        {card.name}
+                      </p>
+                      <p className="text-[11px] text-text-muted truncate">
+                        {card.format === 'manga' ? 'Manga' : 'Anime'}
+                        {card.type && ` · ${card.type}`}
+                        {card.score != null && typeof card.score === 'number' && ` · ★${(card.score / 10).toFixed(1)}`}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                <div className="border-t border-border mt-1">
+                  <button
+                    type="submit"
+                    className="w-full px-4 py-2.5 text-sm font-medium text-accent-1 hover:bg-bg-card-hover transition-colors text-left"
+                  >
+                    See all results for &ldquo;{query}&rdquo;
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Loading indicator */}
+          {suggestionsLoading && (
+            <div className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2">
+              <div className="spinner !w-4 !h-4 !border-[2px]" />
+            </div>
+          )}
         </form>
 
-        <nav className="hidden md:flex items-center gap-2">
-          <Link href="/" className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-white/5">
-            Browse
-          </Link>
-          <Link href="/?sortBy=Trending" className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-white/5">
-            Trending
-          </Link>
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="px-3 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-white/5"
+            >
+              {link.label}
+            </Link>
+          ))}
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="ml-1 p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-all"
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
         </nav>
+
+        {/* Hamburger button - mobile only */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/5 transition-all"
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+        >
+          {mobileMenuOpen ? (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
       </div>
+
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)} />
+          <div className="absolute left-0 right-0 top-full mt-1 mx-3 bg-bg-card border border-border rounded-2xl shadow-2xl z-50 md:hidden overflow-hidden">
+            <nav className="flex flex-col py-2">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-5 py-3 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ))}
+              {/* Theme toggle in mobile menu */}
+              <button
+                onClick={() => { toggleTheme(); setMobileMenuOpen(false); }}
+                className="flex items-center gap-3 px-5 py-3 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
+              >
+                {theme === 'dark' ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+                <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+              </button>
+            </nav>
+          </div>
+        </>
+      )}
     </header>
   );
 }

@@ -783,63 +783,20 @@ async function manga(mangaId) {
 // CHAPTERS (Manga)
 // ============================================================
 
-const CHAPTERS_QUERY = `
-  query Chapters($mangaId: String!, $page: Int, $limit: Int) {
-    chaptersForRead(mangaId: $mangaId, page: $page, limit: $limit) {
+const CHAPTER_PAGES_QUERY = `
+  query ChapterPages($mangaId: String!, $chapterString: String!, $translationType: VaildTranslationTypeMangaEnumType!) {
+    chapterPages(mangaId: $mangaId, chapterString: $chapterString, translationType: $translationType) {
       edges {
         _id
         mangaId
         chapterString
         chapterNumStart
         chapterNumEnd
-        notes
-        chapterAiredDateString
-        volume
-        translationType
-        thumbnail
-        sourceUrl
-        sourceName
-        streamerId
-        priority
         pictureUrls
         pictureUrlHead
+        sourceUrl
+        sourceName
       }
-      pageInfo {
-        total
-        hasNextPage
-        nextPage
-        page
-      }
-      manga {
-        _id
-        name
-        englishName
-        thumbnail
-      }
-    }
-  }
-`;
-
-/**
- * Get chapters for a manga.
- */
-async function chaptersForRead(mangaId, { page = 1, limit = 50 } = {}) {
-  const data = await graphql(CHAPTERS_QUERY, { mangaId, page, limit });
-  return data.chaptersForRead;
-}
-
-const CHAPTER_PAGES_QUERY = `
-  query ChapterPages($chapterId: String!) {
-    chapterPages(chapterId: $chapterId) {
-      _id
-      mangaId
-      chapterString
-      chapterNumStart
-      chapterNumEnd
-      pictureUrls
-      pictureUrlHead
-      sourceUrl
-      sourceName
     }
   }
 `;
@@ -847,9 +804,15 @@ const CHAPTER_PAGES_QUERY = `
 /**
  * Get pages for a specific chapter.
  */
-async function chapterPages(chapterId) {
-  const data = await graphql(CHAPTER_PAGES_QUERY, { chapterId });
-  return data.chapterPages;
+async function chapterPages(mangaId, chapterString, translationType = 'sub') {
+  const data = await graphql(CHAPTER_PAGES_QUERY, {
+    mangaId,
+    chapterString,
+    translationType: translationType.toLowerCase(),
+  });
+  const edges = data?.chapterPages?.edges;
+  // Return the first edge (chapter page data) or null
+  return edges && edges.length > 0 ? edges[0] : null;
 }
 
 // ============================================================
@@ -1304,8 +1267,7 @@ export {
   // Mangas
   mangas,
   manga,
-  // Chapters
-  chaptersForRead,
+  // Chapters (chapterPages only - chapter listing comes from manga.availableChaptersDetail)
   chapterPages,
   // Popular & Recommendations
   queryPopular,

@@ -19,6 +19,10 @@ import type {
   CommentsResponse,
   ReviewsResponse,
   WatchState,
+  Manga,
+  MangasResponse,
+  Chapter,
+  ChapterPages,
 } from '@/types';
 
 const API_BASE = '/api';
@@ -190,6 +194,13 @@ export async function fetchCharacters(
   return fetchJSON<CharactersResponse>(`/characters?${qs}`);
 }
 
+export async function fetchShowCharacters(
+  showId: string,
+  limit = 30
+): Promise<CharactersResponse> {
+  return fetchJSON<CharactersResponse>(`/characters?showId=${encodeURIComponent(showId)}&limit=${limit}`);
+}
+
 // ============================================================
 // TAGS
 // ============================================================
@@ -261,6 +272,43 @@ export async function fetchWatchState(showId: string): Promise<WatchState> {
 export async function fetchPlaylistShows(playlistId: string, page = 1, limit = 20): Promise<ShowsResponse> {
   return fetchJSON<ShowsResponse>(
     `/playlists/${encodeURIComponent(playlistId)}/shows?page=${page}&limit=${limit}`
+  );
+}
+
+// ============================================================
+// MANGA
+// ============================================================
+
+export interface MangasParams {
+  page?: number;
+  limit?: number;
+  translationType?: string;
+  countryOrigin?: string;
+  sortBy?: string;
+  sortOrder?: string;
+  genres?: string;
+  query?: string;
+}
+
+export async function fetchMangas(params: MangasParams = {}): Promise<MangasResponse> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== '') qs.set(k, String(v));
+  });
+  return fetchJSON<MangasResponse>(`/mangas?${qs}`);
+}
+
+export async function fetchManga(id: string): Promise<Manga> {
+  return fetchJSON<Manga>(`/mangas/${encodeURIComponent(id)}`);
+}
+
+export async function fetchChapterPages(
+  mangaId: string,
+  chapterString: string,
+  translationType = 'sub'
+): Promise<ChapterPages | null> {
+  return fetchJSON<ChapterPages | null>(
+    `/chapters/pages?mangaId=${encodeURIComponent(mangaId)}&chapterString=${encodeURIComponent(chapterString)}&translationType=${translationType}`
   );
 }
 

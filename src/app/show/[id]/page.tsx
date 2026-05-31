@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchShow } from '@/lib/api';
 import EpisodeGrid from '@/components/EpisodeGrid';
+import Characters from '@/components/Characters';
 import type { Show } from '@/types';
 
 export default function ShowDetailPage() {
@@ -193,6 +194,9 @@ export default function ShowDetailPage() {
         showId={show._id}
         translationType={translationType}
       />
+
+      {/* Characters */}
+      <Characters showId={show._id} />
     </div>
   );
 }

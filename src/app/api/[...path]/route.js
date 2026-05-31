@@ -186,21 +186,6 @@ async function handleShows(request, segments, method) {
 }
 
 async function handleMangas(request, segments) {
-  // GET /api/mangas/:mangaId/chapters
-  if (segments.length === 3 && segments[2] === 'chapters') {
-    const mangaId = segments[1];
-    const { page = '1', limit = '50' } = getQuery(request);
-    try {
-      const data = await api.chaptersForRead(mangaId, {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-      });
-      return json(data, 200, TTL.EPISODES);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  }
-
   // GET /api/mangas/:id
   if (segments.length === 2) {
     const mangaId = segments[1];
@@ -238,11 +223,14 @@ async function handleMangas(request, segments) {
 }
 
 async function handleChapters(request, segments) {
-  // GET /api/chapters/:chapterId/pages
-  if (segments.length === 3 && segments[2] === 'pages') {
-    const chapterId = segments[1];
+  // GET /api/chapters/pages?mangaId=xxx&chapterString=yyy&translationType=sub
+  if (segments.length === 2 && segments[1] === 'pages') {
+    const { mangaId, chapterString, translationType = 'sub' } = getQuery(request);
+    if (!mangaId || !chapterString) {
+      return json({ error: 'mangaId and chapterString are required' }, 400);
+    }
     try {
-      const data = await api.chapterPages(chapterId);
+      const data = await api.chapterPages(mangaId, chapterString, translationType);
       return json(data, 200, TTL.EPISODES);
     } catch (err) {
       return errorResponse(err);
@@ -370,10 +358,12 @@ async function handleRequest(request, { params }) {
         return await handleChapters(request, segments);
 
       // ── Characters ──
+      // ── Characters ──
       case 'characters': {
         const charQuery = getQuery(request);
         const search = {};
         if (charQuery.name) search.name = charQuery.name;
+        if (charQuery.showId) search.showId = charQuery.showId;
         if (charQuery.limit) search.limit = parseInt(charQuery.limit, 10);
         if (charQuery.page) search.page = parseInt(charQuery.page, 10);
         const data = await api.characters(search);

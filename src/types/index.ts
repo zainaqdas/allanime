@@ -296,3 +296,88 @@ export interface WatchState {
   heldCount?: number;
   lastEpisodeTimestamp?: string;
 }
+
+// ---- Manga ----
+export interface Manga {
+  _id: string;
+  name: string;
+  englishName?: string;
+  nativeName?: string;
+  altNames?: string[];
+  description?: string;
+  score?: { averageScore?: number };
+  popularity?: number;
+  status?: string;
+  type?: string;
+  genres?: string[];
+  tags?: string[];
+  thumbnail?: string;
+  banner?: string;
+  chapterCount?: number;
+  volumes?: number;
+  authors?: string[];
+  magazine?: string;
+  airedStart?: string;
+  airedEnd?: string;
+  isAdult?: boolean;
+  availableChaptersDetail?: Record<string, string[]>;
+  countryOfOrigin?: string;
+  rating?: any;
+}
+
+export interface MangasResponse {
+  edges: Manga[];
+  pageInfo: {
+    total: number;
+    hasNextPage: boolean;
+    nextPage?: number;
+    page: number;
+  };
+}
+
+export interface Chapter {
+  _id: string;
+  mangaId: string;
+  chapterString: string;
+  chapterNumStart?: number;
+  chapterNumEnd?: number;
+  notes?: string;
+  chapterAiredDateString?: string;
+  volume?: number;
+  translationType?: string;
+  thumbnail?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  streamerId?: string;
+  priority?: number;
+  pictureUrls?: string[];
+  pictureUrlHead?: string;
+}
+
+export interface ChaptersForReadResponse {
+  edges: Chapter[];
+  pageInfo: {
+    total: number;
+    hasNextPage: boolean;
+    nextPage?: number;
+    page: number;
+  };
+  manga?: {
+    _id: string;
+    name: string;
+    englishName?: string;
+    thumbnail?: string;
+  };
+}
+
+export interface ChapterPages {
+  _id: string;
+  mangaId: string;
+  chapterString: string;
+  chapterNumStart?: number;
+  chapterNumEnd?: number;
+  pictureUrls?: string[];
+  pictureUrlHead?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+}

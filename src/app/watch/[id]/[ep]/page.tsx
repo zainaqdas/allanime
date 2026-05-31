@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { fetchShow, fetchStreams } from '@/lib/api';
+import { saveProgress } from '@/lib/useContinueWatching';
 import VideoPlayer from '@/components/VideoPlayer';
 import SourceSelector from '@/components/SourceSelector';
 import EpisodeGrid from '@/components/EpisodeGrid';
@@ -87,6 +88,70 @@ export default function WatchPage() {
     setActiveSource(source);
   }, []);
 
+  const episodes = show?.availableEpisodesDetail?.[translationType] || [];
+  const currentEpIndex = episodes.indexOf(episode);
+  const prevEp = currentEpIndex > 0 ? episodes[currentEpIndex - 1] : null;
+  const nextEp = currentEpIndex >= 0 && currentEpIndex < episodes.length - 1 ? episodes[currentEpIndex + 1] : null;
+  const showName = show?.name || show?.englishName || 'Loading...';
+
+  // Save progress when episode/show data is loaded
+  useEffect(() => {
+    if (show && showName !== 'Loading...') {
+      saveProgress(
+        showId,
+        showName,
+        show.thumbnail || '',
+        episode,
+        translationType,
+      );
+    }
+  }, [show, showId, episode, translationType, showName]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't trigger when typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          if (prevEp) {
+            e.preventDefault();
+            router.push(`/watch/${showId}/${prevEp}?type=${translationType}`);
+          }
+          break;
+        case 'ArrowRight':
+          if (nextEp) {
+            e.preventDefault();
+            router.push(`/watch/${showId}/${nextEp}?type=${translationType}`);
+          }
+          break;
+        case 'Escape':
+          if (showSidebar) {
+            e.preventDefault();
+            setShowSidebar(false);
+          }
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); } catch {}
+          break;
+        case 'm':
+        case 'M':
+          // Try to find and mute the video element
+          const video = document.querySelector('video');
+          if (video) {
+            video.muted = !video.muted;
+          }
+          break;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prevEp, nextEp, showId, translationType, showSidebar, router]);
+
   const handleVideoError = useCallback(() => {
     // Try next source if video fails
     const currentIndex = sources.findIndex((s) => s.sourceUrl === activeSource?.sourceUrl);
@@ -94,12 +159,6 @@ export default function WatchPage() {
       setActiveSource(sources[currentIndex + 1]);
     }
   }, [sources, activeSource]);
-
-  const episodes = show?.availableEpisodesDetail?.[translationType] || [];
-  const currentEpIndex = episodes.indexOf(episode);
-  const prevEp = currentEpIndex > 0 ? episodes[currentEpIndex - 1] : null;
-  const nextEp = currentEpIndex >= 0 && currentEpIndex < episodes.length - 1 ? episodes[currentEpIndex + 1] : null;
-  const showName = show?.name || show?.englishName || 'Loading...';
 
   if (loading) {
     return (
