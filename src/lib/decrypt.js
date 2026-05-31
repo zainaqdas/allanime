@@ -17,7 +17,7 @@
  *   7. Parse the decrypted text for sourceName / sourceUrl pairs
  */
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 // Key = SHA-256("Xot36i3lK3:v1") in hex (as a Buffer)
 const ALLANIME_KEY = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
@@ -168,7 +168,7 @@ function parseJsonSources(decryptedText) {
   }
 }
 
-module.exports = {
+export {
   decryptTobeparsed,
   decryptSourceUrls,
   parseSources,

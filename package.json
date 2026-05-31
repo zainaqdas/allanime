@@ -1,27 +1,28 @@
 {
-  "name": "allanime-scraper-api",
+  "name": "kaistream",
   "version": "1.0.0",
-  "description": "Node.js scraper API for mkissa.to / allanime.day - anime and manga discovery hub",
-  "main": "src/index.js",
+  "description": "KaiStream - Stream anime episodes with a clean, modern interface",
+  "private": true,
   "scripts": {
-    "start": "concurrently \"npm run start:api\" \"npm run start:frontend\"",
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
-    "start:api": "PORT=3001 node src/index.js",
-    "dev:api": "PORT=3001 node --watch src/index.js",
-    "start:frontend": "cd frontend && npm run start",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build:frontend": "cd frontend && npm run build",
-    "install:all": "npm install && cd frontend && npm install"
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
   },
   "dependencies": {
     "axios": "^1.7.0",
-    "concurrently": "^9.2.1",
-    "cors": "^2.8.5",
-    "express": "^4.21.0",
     "hls.js": "^1.6.16",
-    "playwright": "^1.60.0",
-    "puppeteer-core": "^25.1.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0"
   }
 }

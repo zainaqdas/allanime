@@ -1,6 +1,7 @@
-const axios = require('axios');
+import crypto from 'crypto';
+import axios from 'axios';
 
-const { decryptTobeparsed, parseSources, parseJsonSources } = require('./decrypt');
+const { decryptTobeparsed, parseSources, parseJsonSources } = await import('./decrypt.js');
 
 const API_URL = 'https://api.allanime.day/api';
 const EMBED_BASE = 'https://allanime.day/embed';
@@ -659,6 +660,8 @@ async function mangas({ page = 1, limit = 20, translationType, countryOrigin, se
       search.sortDirection = (search.sortBy.order === 'DESC' || search.sortBy.order === 'DSC') ? 'DSC' : 'ASC';
       search.sortBy = search.sortBy.property;
     }
+    // Also pass search to variables for mangas
+    variables.search = search;
   }
 
   const data = await graphql(MANGAS_QUERY, variables);
@@ -1210,7 +1213,7 @@ async function searchAnime({ query, tr, cty, sortBy, sortDirection, page = 1, li
   };
 }
 
-module.exports = {
+export {
   graphql,
   // Shows
   shows,
