@@ -81,10 +81,3 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* Text gradient */
-.text-gradient {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}

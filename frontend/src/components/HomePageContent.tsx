@@ -40,6 +40,7 @@ export default function HomePageContent() {
 
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState(searchParams?.get('q') || '');
+  const [tr, setTr] = useState('sub');
 
   // Sync query from URL search params — handles client-side navigation
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function HomePageContent() {
       if (query) {
         // Full search with filters — matches mkissa.to parameters
         const data = await fetchSearch(query, {
-          tr: 'sub',
+          tr,
           cty: 'ALL',
           sortBy: 'Latest_Update',
           sortDirection: '-1',
@@ -90,7 +91,7 @@ export default function HomePageContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, query]);
+  }, [page, query, tr]);
 
   // Load initial data
   useEffect(() => {
@@ -104,7 +105,7 @@ export default function HomePageContent() {
   // Re-load when page or query changes
   useEffect(() => {
     loadShows();
-  }, [page, query]);
+  }, [page, query, tr]);
 
   return (
     <div className="py-8">
@@ -125,10 +126,35 @@ export default function HomePageContent() {
       )}
 
       {/* Title bar */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-extrabold tracking-tight">
           {query ? `Results for "${query}"` : 'Browse Anime'}
         </h1>
+
+        {query && (
+          <div className="flex items-center gap-1.5 ml-auto bg-bg-card border border-border rounded-xl p-1">
+            <button
+              onClick={() => { setTr('sub'); setPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                tr === 'sub'
+                  ? 'bg-accent-1 text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              SUB
+            </button>
+            <button
+              onClick={() => { setTr('dub'); setPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                tr === 'dub'
+                  ? 'bg-accent-1 text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              DUB
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Shows grid */}
