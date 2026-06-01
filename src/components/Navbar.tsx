@@ -9,7 +9,7 @@ import type { SearchCard } from '@/types';
 export default function Navbar() {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Mobile menu state removed — no nav links to display
   const [suggestions, setSuggestions] = useState<SearchCard[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -64,7 +64,7 @@ export default function Navbar() {
     if (query.trim()) {
       router.push(`/?q=${encodeURIComponent(query.trim())}`);
       setShowSuggestions(false);
-      setMobileMenuOpen(false);
+      
     }
   }, [query, router]);
 
@@ -74,15 +74,10 @@ export default function Navbar() {
     router.push(`/show/${card._id}`);
   }, [router]);
 
-  const navLinks = [
-    { href: '/', label: 'Browse' },
-    { href: '/?sortBy=Trending', label: 'Trending' },
-  ];
-
   return (
     <header className="glass sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
       <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-2 md:gap-4">
-        <Link href="/" className="flex items-center gap-2 no-underline shrink-0 group" onClick={() => setMobileMenuOpen(false)}>
+        <Link href="/" className="flex items-center gap-2 no-underline shrink-0 group">
           {/* KaiStream logo: Kai the sea dragon mascot */}
           <div className="relative w-9 h-9 md:w-10 md:h-10 flex items-center justify-center">
             <div className="absolute inset-0 rounded-xl bg-accent-glow/30 blur-md group-hover:bg-accent-glow/50 transition-all duration-300" />
@@ -246,57 +241,12 @@ export default function Navbar() {
           )}
         </form>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="px-3 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-white/5"
-            >
-              {link.label}
-            </Link>
-          )          )}
-        </nav>
+        {/* Desktop nav — empty for now */}
+        <div />
 
-        {/* Hamburger button - mobile only */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/5 transition-all"
-          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-        >
-          {mobileMenuOpen ? (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+        {/* Desktop spacer — balances the layout */}
+        <div className="w-9 md:w-10" />
       </div>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)} />
-          <div className="absolute left-0 right-0 top-full mt-1 mx-3 bg-bg-card border border-border rounded-2xl shadow-2xl z-50 md:hidden overflow-hidden">
-            <nav className="flex flex-col py-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="px-5 py-3 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
-                >
-                  {link.label}
-                </Link>
-              )              )}
-            </nav>
-          </div>
-        </>
-      )}
     </header>
   );
 }
