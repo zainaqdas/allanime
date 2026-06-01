@@ -11,12 +11,10 @@ interface Props {
 export default function Characters({ showId }: Props) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!showId) return;
     setLoading(true);
-    setError(null);
     fetchShowCharacters(showId)
       .then((res) => setCharacters(res.edges || []))
       .catch((err) => {
@@ -25,7 +23,6 @@ export default function Characters({ showId }: Props) {
           setCharacters([]);
         } else {
           console.error('Characters fetch error:', err);
-          setError(err.message);
         }
       })
       .finally(() => setLoading(false));
@@ -48,7 +45,7 @@ export default function Characters({ showId }: Props) {
     );
   }
 
-  if (error || characters.length === 0) {
+  if (characters.length === 0) {
     return null;
   }
 

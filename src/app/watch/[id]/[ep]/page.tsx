@@ -7,7 +7,6 @@ import { fetchShow, fetchStreams } from '@/lib/api';
 import { saveProgress } from '@/lib/useContinueWatching';
 import VideoPlayer from '@/components/VideoPlayer';
 import SourceSelector from '@/components/SourceSelector';
-import EpisodeGrid from '@/components/EpisodeGrid';
 import type { SourceItem, Show } from '@/types';
 
 export default function WatchPage() {

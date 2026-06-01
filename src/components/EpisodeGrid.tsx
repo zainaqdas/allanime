@@ -7,10 +7,9 @@ interface EpisodeGridProps {
   episodes: string[];
   showId: string;
   translationType: string;
-  currentEpisode?: string;
 }
 
-export default function EpisodeGrid({ episodes, showId, translationType, currentEpisode }: EpisodeGridProps) {
+export default function EpisodeGrid({ episodes, showId, translationType }: EpisodeGridProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const sorted = [...episodes].sort((a, b) => {
@@ -50,50 +49,36 @@ export default function EpisodeGrid({ episodes, showId, translationType, current
 
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-          {sorted.map((ep) => {
-            const isCurrent = ep === currentEpisode;
-            return (
-              <Link
-                key={ep}
-                href={`/watch/${showId}/${ep}?type=${translationType}`}
-                className={`block text-center p-3 rounded-lg border transition-all duration-150 ${
-                  isCurrent
-                    ? 'border-accent-1 bg-accent-1/10 text-accent-1'
-                    : 'border-border bg-bg-card hover:border-accent-1 hover:bg-bg-card-hover hover:-translate-y-0.5 text-text-primary'
-                }`}
-              >
-                <div className="text-lg font-bold">{ep}</div>
-                <div className="text-[10px] uppercase tracking-wider text-text-muted mt-0.5">Episode</div>
-              </Link>
-            );
-          })}
+          {sorted.map((ep) => (
+            <Link
+              key={ep}
+              href={`/watch/${showId}/${ep}?type=${translationType}`}
+              className="block text-center p-3 rounded-lg border border-border bg-bg-card hover:border-accent-1 hover:bg-bg-card-hover hover:-translate-y-0.5 text-text-primary transition-all duration-150"
+            >
+              <div className="text-lg font-bold">{ep}</div>
+              <div className="text-[10px] uppercase tracking-wider text-text-muted mt-0.5">Episode</div>
+            </Link>
+          ))}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {sorted.map((ep) => {
-            const isCurrent = ep === currentEpisode;
-            return (
-              <Link
-                key={ep}
-                href={`/watch/${showId}/${ep}?type=${translationType}`}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all duration-150 ${
-                  isCurrent
-                    ? 'border-accent-1 bg-accent-1/10'
-                    : 'border-border bg-bg-card hover:border-accent-1 hover:bg-bg-card-hover'
-                }`}
-              >
-                <span className={`font-bold text-sm min-w-[40px] ${isCurrent ? 'text-accent-1' : 'text-text-muted'}`}>
-                  {ep}
-                </span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Episode {ep}</div>
-                </div>
-                <svg className={`w-4 h-4 transition-opacity ${isCurrent ? 'opacity-100 text-accent-1' : 'opacity-0 group-hover:opacity-100'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            );
-          })}
+          {sorted.map((ep) => (
+            <Link
+              key={ep}
+              href={`/watch/${showId}/${ep}?type=${translationType}`}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-bg-card hover:border-accent-1 hover:bg-bg-card-hover transition-all duration-150 group"
+            >
+              <span className="font-bold text-sm min-w-[40px] text-text-muted">
+                {ep}
+              </span>
+              <div className="flex-1">
+                <div className="text-sm font-medium">Episode {ep}</div>
+              </div>
+              <svg className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          ))}
         </div>
       )}
     </div>

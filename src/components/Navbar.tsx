@@ -73,11 +73,7 @@ export default function Navbar() {
   const selectSuggestion = useCallback((card: SearchCard) => {
     setShowSuggestions(false);
     setQuery('');
-    if (card.format === 'manga') {
-      router.push(`/manga/${card._id}`);
-    } else {
-      router.push(`/show/${card._id}`);
-    }
+    router.push(`/show/${card._id}`);
   }, [router]);
 
   const navLinks = [
@@ -181,7 +177,7 @@ export default function Navbar() {
             value={query}
             onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
             onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-            placeholder="Search anime or manga..."
+            placeholder="Search anime..."
             className="w-full py-2.5 md:py-3 pl-10 md:pl-12 pr-10 bg-bg-card border border-border rounded-xl md:rounded-2xl text-text-primary text-sm outline-none transition-all duration-200 focus:border-accent-1 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.3)] placeholder:text-text-muted"
           />
           <svg className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-text-muted w-3.5 h-3.5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -218,9 +214,7 @@ export default function Navbar() {
                       {card.thumbnail ? (
                         <img src={card.thumbnail} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-text-muted">
-                          {card.format === 'manga' ? '📕' : '🎬'}
-                        </div>
+                        <div className="w-full h-full flex items-center justify-center text-xs text-text-muted">🎬</div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -228,8 +222,7 @@ export default function Navbar() {
                         {card.name}
                       </p>
                       <p className="text-[11px] text-text-muted truncate">
-                        {card.format === 'manga' ? 'Manga' : 'Anime'}
-                        {card.type && ` · ${card.type}`}
+                        Anime{card.type && ` · ${card.type}`}
                         {card.score != null && typeof card.score === 'number' && ` · ★${(card.score / 10).toFixed(1)}`}
                       </p>
                     </div>

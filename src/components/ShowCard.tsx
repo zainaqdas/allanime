@@ -6,12 +6,10 @@ import type { Show } from '@/types';
 
 interface ShowCardProps {
   show: Show;
-  format?: 'anime' | 'manga';
 }
 
-export default function ShowCard({ show, format = 'anime' }: ShowCardProps) {
+export default function ShowCard({ show }: ShowCardProps) {
   const [imgError, setImgError] = useState(false);
-  const isManga = format === 'manga';
   const thumb = show.thumbnail;
   const name = show.name || show.englishName || 'Unknown';
   const score = show.score?.averageScore != null ? (show.score.averageScore / 10).toFixed(1) : null;
@@ -19,7 +17,7 @@ export default function ShowCard({ show, format = 'anime' }: ShowCardProps) {
   const statusMap: Record<string, string> = { '0': 'Finished', '1': 'Releasing', '2': 'Not yet aired', '3': 'Cancelled' };
   const status = show.status ? statusMap[show.status] || show.status : null;
 
-  const detailLink = isManga ? `/manga/${show._id}` : `/show/${show._id}`;
+  const detailLink = `/show/${show._id}`;
 
   return (
     <Link
@@ -37,12 +35,12 @@ export default function ShowCard({ show, format = 'anime' }: ShowCardProps) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-bg-card to-bg-card-hover">
-            <span className="text-4xl opacity-30">{isManga ? '📖' : '🎬'}</span>
+            <span className="text-4xl opacity-30">🎬</span>
           </div>
         )}
         {status && (
           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-gradient-to-r from-accent-1 to-accent-2 text-white shadow-lg">
-            {status === 'Releasing' ? (isManga ? 'Ongoing' : 'Airing') : status}
+            {status === 'Releasing' ? 'Airing' : status}
           </div>
         )}
       </div>
@@ -51,7 +49,7 @@ export default function ShowCard({ show, format = 'anime' }: ShowCardProps) {
         <div className="flex items-center gap-2 text-xs text-text-muted">
           {score && <span className="text-warning font-semibold">★ {score}</span>}
           {show.type && <span>{show.type}</span>}
-          {epCount > 0 && <span className="ml-auto">{epCount} {isManga ? 'ch' : 'ep'}</span>}
+          {epCount > 0 && <span className="ml-auto">{epCount} ep</span>}
         </div>
       </div>
     </Link>

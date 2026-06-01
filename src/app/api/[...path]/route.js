@@ -185,61 +185,6 @@ async function handleShows(request, segments, method) {
   return json({ error: 'Not found' }, 404);
 }
 
-async function handleMangas(request, segments) {
-  // GET /api/mangas/:id
-  if (segments.length === 2) {
-    const mangaId = segments[1];
-    try {
-      const data = await api.manga(mangaId);
-      return json(data, 200, TTL.SHOW);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  }
-
-  // GET /api/mangas
-  if (segments.length === 1) {
-    const query = getQuery(request);
-    const search = {};
-    if (query.sortBy) search.sortBy = query.sortBy;
-    if (query.genres) search.genres = query.genres.split(',').map(g => g.trim());
-    if (query.query) search.query = query.query;
-
-    try {
-      const data = await api.mangas({
-        page: parseInt(query.page || '1', 10),
-        limit: parseInt(query.limit || '20', 10),
-        translationType: query.translationType,
-        countryOrigin: query.countryOrigin,
-        search: Object.keys(search).length > 0 ? search : undefined,
-      });
-      return json(data, 200, TTL.SHOWS);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  }
-
-  return json({ error: 'Not found' }, 404);
-}
-
-async function handleChapters(request, segments) {
-  // GET /api/chapters/pages?mangaId=xxx&chapterString=yyy&translationType=sub
-  if (segments.length === 2 && segments[1] === 'pages') {
-    const { mangaId, chapterString, translationType = 'sub' } = getQuery(request);
-    if (!mangaId || !chapterString) {
-      return json({ error: 'mangaId and chapterString are required' }, 400);
-    }
-    try {
-      const data = await api.chapterPages(mangaId, chapterString, translationType);
-      return json(data, 200, TTL.EPISODES);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  }
-
-  return json({ error: 'Not found' }, 404);
-}
-
 async function handleWatchState(request, segments) {
   // GET /api/watch-state/:showId
   if (segments.length === 2) {
@@ -301,29 +246,6 @@ async function handleRequest(request, { params }) {
           return json({ error: 'query parameter "q" is required' }, 400);
         }
 
-        // If format=manga, search mangas instead of anime
-        if (query.format === 'manga') {
-          const searchParams = {};
-          if (query.sortBy) searchParams.sortBy = query.sortBy;
-          searchParams.query = query.q;
-
-          const data = await api.mangas({
-            page: query.page ? parseInt(query.page, 10) : 1,
-            limit: query.limit ? parseInt(query.limit, 10) : 40,
-            translationType: query.tr,
-            countryOrigin: query.cty,
-            search: searchParams,
-          });
-
-          // Convert MangasResponse to SearchResult shape
-          const anyCards = (data.edges || []).map(e => ({
-            ...e,
-            format: 'manga',
-          }));
-
-          return json({ anyCards, pageInfo: data.pageInfo }, 200, TTL.SEARCH);
-        }
-
         const data = await api.searchAnime({
           query: query.q,
           tr: query.tr,
@@ -338,14 +260,9 @@ async function handleRequest(request, { params }) {
 
       // ── Embed ──
       case 'embed': {
-        const { showId, episodeString, translationType = 'sub', format } = getQuery(request);
+        const { showId, episodeString, translationType = 'sub' } = getQuery(request);
         if (!showId || !episodeString) {
           return json({ error: 'showId and episodeString are required' }, 400);
-        }
-
-        if (format === 'manga') {
-          const watchUrl = api.generateMangaWatchUrl(showId, episodeString, translationType);
-          return json({ embedUrl: watchUrl, watchUrl }, 200, TTL.CATEGORIES);
         }
 
         const embedUrl = api.generateEmbedUrl(showId, episodeString, translationType);
@@ -379,23 +296,15 @@ async function handleRequest(request, { params }) {
         return json(data, 200, TTL.RECOMMEND);
       }
 
-      // ── Mangas ──
-      case 'mangas':
-        return await handleMangas(request, segments);
-
-      // ── Chapters ──
-      case 'chapters':
-        return await handleChapters(request, segments);
-
-      // ── Characters ──
       // ── Characters ──
       case 'characters': {
         const charQuery = getQuery(request);
         const search = {};
-        if (charQuery.name) search.name = charQuery.name;
-        if (charQuery.showId) search.showId = charQuery.showId;
+        if (charQuery.name) search.query = charQuery.name;
+        if (charQuery.showId) search.playId = charQuery.showId;
         if (charQuery.limit) search.limit = parseInt(charQuery.limit, 10);
         if (charQuery.page) search.page = parseInt(charQuery.page, 10);
+        if (charQuery.format) search.format = charQuery.format;
         const data = await api.characters(search);
         return json(data, 200, TTL.CHARACTERS);
       }

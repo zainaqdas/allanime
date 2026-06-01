@@ -7,7 +7,7 @@ const { decryptTobeparsed, parseSources, parseJsonSources } = await import('./de
 const API_URL = 'https://api.allanime.day/api';
 const EMBED_BASE = 'https://allanime.day/embed';
 const WATCH_BASE = 'https://mkissa.to/anime';
-const MANGA_BASE = 'https://mkissa.to/manga';
+
 
 // Referrer that bypasses CAPTCHA (per ani-cli reverse engineering)
 const ALLANIME_REFR = 'https://youtu-chan.com';
@@ -36,10 +36,7 @@ function ttlForQuery(query) {
     Episode:              TTL.EPISODE,
     EpisodeInfos:         TTL.EPISODES,
     FastSearch:           TTL.SEARCH,
-    Mangas:               TTL.SHOWS,
-    Manga:                TTL.SHOW,
-    Chapters:             TTL.EPISODES,
-    ChapterPages:         TTL.EPISODES,
+
     QueryPopular:         TTL.POPULAR,
     QueryRecommendation:  TTL.RECOMMEND,
     QueryRandomRecommendation: TTL.RECOMMEND,
@@ -52,7 +49,7 @@ function ttlForQuery(query) {
     ShowsWithIds:         TTL.SHOWS,
     ShowsWithPlaylistId:  TTL.PLAYLISTS,
     SearchShows:          TTL.SEARCH,
-    SearchMangas:         TTL.SEARCH,
+
   };
   return map[name] ?? TTL.DEFAULT;
 }
@@ -658,163 +655,15 @@ async function fastSearch(queryStr, limit = 10) {
     // fastSearch failed, fall through to shows-based search
   }
 
-  // Fallback: search using shows and mangas queries
-  const [showsData, mangasData] = await Promise.all([
-    graphql(
-      `query SearchShows($search: SearchInput) { shows(search: $search, limit: ${limit}) { edges { _id name englishName nativeName type thumbnail score status genres episodeCount } } }`,
-      { search: { query: queryStr, allowAdult: true } }
-    ),
-    graphql(
-      `query SearchMangas($search: SearchInput) { mangas(search: $search, limit: ${limit}) { edges { _id name englishName type thumbnail score status chapterCount } } }`,
-      { search: { query: queryStr, allowAdult: true } }
-    ),
-  ]);
+  // Fallback: search using shows query
+  const showsData = await graphql(
+    `query SearchShows($search: SearchInput) { shows(search: $search, limit: ${limit}) { edges { _id name englishName nativeName type thumbnail score status genres episodeCount } } }`,
+    { search: { query: queryStr, allowAdult: true } }
+  );
 
-  const anyCards = [
-    ...(showsData?.shows?.edges || []).map(e => ({ ...e, format: 'anime' })),
-    ...(mangasData?.mangas?.edges || []).map(e => ({ ...e, format: 'manga' })),
-  ];
+  const anyCards = (showsData?.shows?.edges || []).map(e => ({ ...e, format: 'anime' }));
 
   return { anyCards };
-}
-
-// ============================================================
-// MANGAS
-// ============================================================
-
-const MANGAS_QUERY = `
-  query Mangas($search: SearchInput, $page: Int, $limit: Int, $translationType: VaildTranslationTypeMangaEnumType, $countryOrigin: VaildCountryOriginEnumType) {
-    mangas(search: $search, page: $page, limit: $limit, translationType: $translationType, countryOrigin: $countryOrigin) {
-      edges {
-        _id
-        name
-        englishName
-        nativeName
-        altNames
-        description
-        score
-        popularity
-        status
-        type
-        genres
-        tags
-        thumbnail
-        banner
-        chapterCount
-        volumes
-        authors
-        magazine
-        airedStart
-        airedEnd
-        isAdult
-        availableChaptersDetail
-        countryOfOrigin
-      }
-      pageInfo {
-        total
-        hasNextPage
-        nextPage
-        page
-      }
-    }
-  }
-`;
-
-/**
- * Get a paginated list of mangas.
- */
-async function mangas({ page = 1, limit = 20, translationType, countryOrigin, search } = {}) {
-  const variables = { page, limit };
-  if (translationType) variables.translationType = translationType.toLowerCase();
-  if (countryOrigin) variables.countryOrigin = countryOrigin.toUpperCase();
-  if (search) {
-    // SortBy is a GraphQL enum — pass as-is, strip any sortDirection field
-    delete search.sortDirection;
-    // Backward compat: if sortBy is still { property, order } object, extract property
-    if (search.sortBy && typeof search.sortBy === 'object') {
-      search.sortBy = search.sortBy.property;
-    }
-    variables.search = search;
-  }
-
-  const data = await graphql(MANGAS_QUERY, variables);
-  return data.mangas;
-}
-
-const MANGA_QUERY = `
-  query Manga($_id: String!) {
-    manga(_id: $_id) {
-      _id
-      name
-      englishName
-      nativeName
-      altNames
-      description
-      score
-      popularity
-      status
-      type
-      genres
-      tags
-      thumbnail
-      banner
-      thumbnails
-      chapterCount
-      volumes
-      authors
-      magazine
-      airedStart
-      airedEnd
-      isAdult
-      availableChaptersDetail
-      countryOfOrigin
-      rating
-    }
-  }
-`;
-
-/**
- * Get a single manga by ID.
- */
-async function manga(mangaId) {
-  const data = await graphql(MANGA_QUERY, { _id: mangaId });
-  return data.manga;
-}
-
-// ============================================================
-// CHAPTERS (Manga)
-// ============================================================
-
-const CHAPTER_PAGES_QUERY = `
-  query ChapterPages($mangaId: String!, $chapterString: String!, $translationType: VaildTranslationTypeMangaEnumType!) {
-    chapterPages(mangaId: $mangaId, chapterString: $chapterString, translationType: $translationType) {
-      edges {
-        _id
-        mangaId
-        chapterString
-        chapterNumStart
-        chapterNumEnd
-        pictureUrls
-        pictureUrlHead
-        sourceUrl
-        sourceName
-      }
-    }
-  }
-`;
-
-/**
- * Get pages for a specific chapter.
- */
-async function chapterPages(mangaId, chapterString, translationType = 'sub') {
-  const data = await graphql(CHAPTER_PAGES_QUERY, {
-    mangaId,
-    chapterString,
-    translationType: translationType.toLowerCase(),
-  });
-  const edges = data?.chapterPages?.edges;
-  // Return the first edge (chapter page data) or null
-  return edges && edges.length > 0 ? edges[0] : null;
 }
 
 // ============================================================
@@ -965,7 +814,7 @@ async function showsWithPlaylistId(playlistId, { page = 1, limit = 20, visitor }
 // ============================================================
 
 const CHARACTERS_QUERY = `
-  query Characters($search: CharacterSearch) {
+  query Characters($search: CharacterSearch!) {
     characters(search: $search) {
       edges {
         _id
@@ -1217,14 +1066,6 @@ function generateWatchUrl(showId, episodeString, translationType = 'sub') {
 }
 
 /**
- * Generate the mkissa.to manga direct watch page URL.
- * Format: https://mkissa.to/manga/{mangaId}/chapter-{chapterString}-{translationType}
- */
-function generateMangaWatchUrl(mangaId, chapterString, translationType = 'sub') {
-  return `${MANGA_BASE}/${mangaId}/chapter-${chapterString}-${translationType}`;
-}
-
-/**
  * Full search using the shows query with comprehensive filtering.
  * Accepts tr (translationType), cty (countryOrigin), sortBy, sortDirection, page, limit.
  * Returns results in anyCards format compatible with frontend SearchResult.
@@ -1274,11 +1115,7 @@ export {
   episodeDirectSources,
   // Search
   fastSearch,
-  // Mangas
-  mangas,
-  manga,
-  // Chapters (chapterPages only - chapter listing comes from manga.availableChaptersDetail)
-  chapterPages,
+
   // Popular & Recommendations
   queryPopular,
   queryRecommendation,
@@ -1297,5 +1134,5 @@ export {
   // Utility
   generateEmbedUrl,
   generateWatchUrl,
-  generateMangaWatchUrl,
+
 };
