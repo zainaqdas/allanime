@@ -50,6 +50,8 @@ export default function HomePageContent() {
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(hasMore);
   const showsLengthRef = useRef(shows.length);
+  const pageRef = useRef(page);
+  const loadShowsRef = useRef<((append: boolean, targetPage?: number) => Promise<void>)>(null!);
 
   const genres = [
     'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
@@ -80,7 +82,8 @@ export default function HomePageContent() {
   const continueWatching = useContinueWatching();
   const [trendingShows, setTrendingShows] = useState<Show[]>([]);
 
-  const loadShows = useCallback(async (append = false) => {
+  const loadShows = useCallback(async (append = false, targetPage?: number) => {
+    const pageNum = targetPage ?? page;
     if (append) {
       setLoadingMore(true);
     } else {
@@ -94,16 +97,16 @@ export default function HomePageContent() {
           cty: 'ALL',
           sortBy: 'Latest_Update',
           sortDirection: '-1',
-          page,
+          page: pageNum,
           limit: SHOWS_PER_PAGE,
         });
         const results = (data.anyCards || []).map(cardToShow);
         setShows(prev => append ? [...prev, ...results] : results);
         const hasNext = data.pageInfo?.hasNextPage;
         setHasMore(!!hasNext);
-        if (!append) setTotal(results.length);
+        if (!append) setTotal(data.pageInfo?.total ?? results.length);
       } else {
-        const params: any = { page, limit: SHOWS_PER_PAGE, sortBy };
+        const params: any = { page: pageNum, limit: SHOWS_PER_PAGE, sortBy };
         if (selectedGenre) params.genres = selectedGenre;
         const data = await fetchShows(params);
         const edges = data.edges || [];
@@ -125,24 +128,26 @@ export default function HomePageContent() {
       loadingMoreRef.current = false;
     }
   }, [page, query, tr, selectedGenre, sortBy]);
+  // Keep loadShowsRef in sync so the stable IntersectionObserver always calls the latest version
+  loadShowsRef.current = loadShows;
 
   // Sync refs with state for the (stable) IntersectionObserver
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
   useEffect(() => { showsLengthRef.current = shows.length; }, [shows.length]);
+  useEffect(() => { pageRef.current = page; }, [page]);
 
   // Load initial data and re-load when filters change
   useEffect(() => {
-    loadShows(false);
+    loadShows(false, 1);
     fetchPopular('ANIME', 12).then((d) => {
       const cards = d.recommendations?.map((r: any) => r.anyCard).filter(Boolean) || [];
       setTrendingShows(cards.map(cardToShow));
     }).catch(() => {});
   }, [query, tr, selectedGenre, sortBy]);
 
-  // Stable IntersectionObserver — uses refs instead of deps so it never re-creates.
-  // Prevents cascading page loads when the sentinel is still intersecting after a load completes.
-  // loadingMoreRef gates page increments with a ref that is cleared only *after* the observer
-  // is re-attached, preventing duplicate triggers.
+  // Stable IntersectionObserver — directly loads the next page when sentinel is in view.
+  // Uses refs for all dynamic values so it never needs to be re-created.
+  // loadingMoreRef gates page increments to prevent cascade loads.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -156,7 +161,9 @@ export default function HomePageContent() {
           showsLengthRef.current > 0
         ) {
           loadingMoreRef.current = true;
-          setPage(prev => prev + 1);
+          const nextPage = pageRef.current + 1;
+          setPage(nextPage);
+          loadShowsRef.current(true, nextPage);
         }
       },
       { rootMargin: '400px' }
@@ -164,13 +171,13 @@ export default function HomePageContent() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, []);
+  }, []); // stable — never re-creates
 
-  // When page changes to a new page (not 1), append results
-  useEffect(() => {
-    if (page > 1) {
-      loadShows(true);
-    }
+  // Helper to jump to a specific page (replaces current shows)
+  const goToPage = useCallback((targetPage: number) => {
+    if (targetPage === page) return;
+    setPage(targetPage);
+    loadShows(false, targetPage);
   }, [page, loadShows]);
 
   return (
@@ -370,36 +377,101 @@ export default function HomePageContent() {
               </div>
             </div>
           )}
-          {/* Manual Load More fallback (in case IntersectionObserver doesn't fire) */}
-          {hasMore && !loadingMore && shows.length > 0 && (
-            <div className="flex justify-center py-6">
-              <button
-                onClick={() => {
-                  loadingMoreRef.current = true;
-                  setPage(prev => prev + 1);
-                }}
-                className="px-8 py-3 bg-gradient-to-r from-accent-1 to-accent-2 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-accent-glow/30 transition-all"
-              >
-                Load More
-              </button>
-            </div>
-          )}
-          {!hasMore && shows.length >= SHOWS_PER_PAGE && (
-            <div className="text-center py-6 text-text-muted">
-              <span className="text-sm">You've reached the end</span>
-            </div>
-          )}
-          {/* Back to Top — appears once many cards are loaded */}
-          {shows.length >= SHOWS_PER_PAGE * 3 && (
-            <div className="flex justify-center py-4">
-              <button
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="px-6 py-2 bg-bg-card border border-border text-text-muted text-xs font-medium rounded-xl hover:border-accent-1 hover:text-text-secondary transition-all"
-              >
-                ↑ Back to Top
-              </button>
-            </div>
-          )}
+          {/* Pagination — numbered page buttons */}
+          {total > 0 && (() => {
+            const totalPages = Math.ceil(total / SHOWS_PER_PAGE);
+            if (totalPages <= 1) return null;
+
+            const getPageNumbers = () => {
+              const pages: (number | 'ellipsis-start' | 'ellipsis-end')[] = [];
+              const range = 2; // pages to show around current
+
+              pages.push(1);
+
+              if (page - range > 2) pages.push('ellipsis-start');
+
+              for (let i = Math.max(2, page - range); i <= Math.min(totalPages - 1, page + range); i++) {
+                pages.push(i);
+              }
+
+              if (page + range < totalPages - 1) pages.push('ellipsis-end');
+
+              if (totalPages > 1) pages.push(totalPages);
+
+              return pages;
+            };
+
+            return (
+              <div className="flex flex-col items-center gap-4 py-8">
+                {/* Page info */}
+                <div className="text-xs text-text-muted">
+                  Page {page} of {totalPages} ({total.toLocaleString()} total)
+                </div>
+
+                {/* Page buttons */}
+                <div className="flex items-center gap-1.5">
+                  {/* Previous */}
+                  <button
+                    disabled={page <= 1}
+                    onClick={() => {
+                      goToPage(Math.max(1, page - 1));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-2 text-xs font-medium rounded-lg bg-bg-card border border-border text-text-muted hover:text-text-secondary hover:border-accent-1 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    ‹ Prev
+                  </button>
+
+                  {/* Page numbers */}
+                  {getPageNumbers().map((p, idx) => {
+                    if (p === 'ellipsis-start' || p === 'ellipsis-end') {
+                      return (
+                        <span key={p} className="px-2 py-2 text-xs text-text-muted select-none">
+                          …
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => {
+                          goToPage(p);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`w-9 h-9 text-xs font-semibold rounded-lg transition-all ${
+                          p === page
+                            ? 'bg-gradient-to-r from-accent-1 to-accent-2 text-white shadow-sm'
+                            : 'bg-bg-card border border-border text-text-muted hover:text-text-secondary hover:border-accent-1'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+
+                  {/* Next */}
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => {
+                      goToPage(Math.min(totalPages, page + 1));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-2 text-xs font-medium rounded-lg bg-bg-card border border-border text-text-muted hover:text-text-secondary hover:border-accent-1 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next ›
+                  </button>
+                </div>
+
+                {/* Back to Top */}
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="px-6 py-2 bg-bg-card border border-border text-text-muted text-xs font-medium rounded-xl hover:border-accent-1 hover:text-text-secondary transition-all"
+                >
+                  ↑ Back to Top
+                </button>
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
