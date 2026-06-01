@@ -29,7 +29,8 @@ export default function WatchPage() {
   const getValidSources = useCallback((srcs: SourceItem[]) => {
     return srcs.filter((s) => {
       const url = s.sourceUrl || '';
-      // Exclude the external website fallbacks (allanime embed, mkissa.to)
+      // Exclude external website fallbacks (allanime.day/mkissa.to) — these pages
+      // block being loaded in iframes via X-Frame-Options / CSP.
       if (url.includes('allanime.day') || url.includes('mkissa.to')) return false;
       return url.startsWith('http');
     });
@@ -37,19 +38,19 @@ export default function WatchPage() {
 
   // Auto-select best source
   const autoSelectSource = useCallback((validSources: SourceItem[]) => {
-    // Prefer stable iframe embed sources (mp4upload, ok.ru, etc.) — these are most reliable
+    // 1. Stable iframe embed sources (mp4upload, ok.ru, etc.) — most reliable
     const iframeSource = validSources.find(
       (s) => s.sourceUrl?.includes('mp4upload') || s.sourceUrl?.includes('ok.ru') || s.sourceUrl?.includes('allanime.uns.bio') || s.sourceUrl?.includes('bysekoze.com')
     );
     if (iframeSource) return iframeSource;
 
-    // Fallback to direct video sources (Yt-mp4, .mp4, .m3u8) — these often have expiring auth tokens
+    // 2. Direct video sources (Yt-mp4, .mp4, .m3u8) — often have expiring auth tokens
     const videoSource = validSources.find(
       (s) => s.sourceName === 'Yt-mp4' || s.sourceUrl?.includes('tools.fast4speed') || s.sourceUrl?.includes('.mp4') || s.sourceUrl?.includes('.m3u8')
     );
     if (videoSource) return videoSource;
 
-    // Last resort: first valid source
+    // 3. First remaining valid source
     return validSources[0] || null;
   }, []);
 
@@ -159,6 +160,9 @@ export default function WatchPage() {
     }
   }, [sources, activeSource]);
 
+  // Fallback embed URL for opening in a new tab (bypasses iframe restrictions)
+  const fallbackEmbedUrl = `https://allanime.day/embed?animeiframe=${showId}/${episode}/${translationType}`;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
@@ -261,13 +265,32 @@ export default function WatchPage() {
                 onSelect={handleSourceChange}
               />
             )}
+            {/* Last-resort fallback — opens AllAnime embed in a new tab */}
+            <div className="flex justify-center px-4 py-2 bg-black/60 border-t border-white/5">
+              <a
+                href={fallbackEmbedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-text-muted hover:text-accent-1 transition-colors underline underline-offset-2"
+              >
+                Having trouble? Open on AllAnime ↗
+              </a>
+            </div>
           </div>
         ) : sources.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-text-muted">
+            <div className="text-center text-text-muted max-w-md">
               <div className="text-5xl mb-4">🔗</div>
               <h3 className="text-lg text-text-secondary font-semibold mb-2">No stream sources available</h3>
-              <p className="text-sm">No embeddable sources found for this episode.</p>
+              <p className="text-sm mb-6">No embeddable sources found for this episode.</p>
+              <a
+                href={fallbackEmbedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-5 py-2.5 bg-gradient-to-r from-accent-1 to-accent-2 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-accent-glow/30 transition-all"
+              >
+                Open on AllAnime ↗
+              </a>
             </div>
           </div>
         ) : null}
