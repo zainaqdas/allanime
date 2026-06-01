@@ -14,7 +14,6 @@ const config: Config = {
           secondary: '#0a120a',
           card: '#0f1a0f',
           'card-hover': '#162216',
-          input: '#0f1a0f',
         },
         text: {
           primary: '#f0fdf0',
