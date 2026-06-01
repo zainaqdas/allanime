@@ -48,6 +48,8 @@ export default function HomePageContent() {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(hasMore);
+  const showsLengthRef = useRef(shows.length);
 
   const genres = [
     'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
@@ -124,6 +126,10 @@ export default function HomePageContent() {
     }
   }, [page, query, tr, selectedGenre, sortBy]);
 
+  // Sync refs with state for the (stable) IntersectionObserver
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+  useEffect(() => { showsLengthRef.current = shows.length; }, [shows.length]);
+
   // Load initial data and re-load when filters change
   useEffect(() => {
     loadShows(false);
@@ -133,17 +139,22 @@ export default function HomePageContent() {
     }).catch(() => {});
   }, [query, tr, selectedGenre, sortBy]);
 
-  // Infinite scroll: observe sentinel and load next page
-  // Uses loadingMoreRef to prevent duplicate page increments (IntersectionObserver
-  // can fire multiple times before React re-renders with updated state).
+  // Stable IntersectionObserver — uses refs instead of deps so it never re-creates.
+  // Prevents cascading page loads when the sentinel is still intersecting after a load completes.
+  // loadingMoreRef gates page increments with a ref that is cleared only *after* the observer
+  // is re-attached, preventing duplicate triggers.
   useEffect(() => {
-    if (!hasMore || loading || loadingMore || shows.length === 0) return;
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMoreRef.current && shows.length > 0) {
+        if (
+          entries[0].isIntersecting &&
+          hasMoreRef.current &&
+          !loadingMoreRef.current &&
+          showsLengthRef.current > 0
+        ) {
           loadingMoreRef.current = true;
           setPage(prev => prev + 1);
         }
@@ -153,14 +164,14 @@ export default function HomePageContent() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loading, loadingMore, shows.length]);
+  }, []);
 
   // When page changes to a new page (not 1), append results
   useEffect(() => {
     if (page > 1) {
       loadShows(true);
     }
-  }, [page]);
+  }, [page, loadShows]);
 
   return (
     <div className="py-8">
@@ -359,9 +370,34 @@ export default function HomePageContent() {
               </div>
             </div>
           )}
+          {/* Manual Load More fallback (in case IntersectionObserver doesn't fire) */}
+          {hasMore && !loadingMore && shows.length > 0 && (
+            <div className="flex justify-center py-6">
+              <button
+                onClick={() => {
+                  loadingMoreRef.current = true;
+                  setPage(prev => prev + 1);
+                }}
+                className="px-8 py-3 bg-gradient-to-r from-accent-1 to-accent-2 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-accent-glow/30 transition-all"
+              >
+                Load More
+              </button>
+            </div>
+          )}
           {!hasMore && shows.length >= SHOWS_PER_PAGE && (
             <div className="text-center py-6 text-text-muted">
               <span className="text-sm">You've reached the end</span>
+            </div>
+          )}
+          {/* Back to Top — appears once many cards are loaded */}
+          {shows.length >= SHOWS_PER_PAGE * 3 && (
+            <div className="flex justify-center py-4">
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="px-6 py-2 bg-bg-card border border-border text-text-muted text-xs font-medium rounded-xl hover:border-accent-1 hover:text-text-secondary transition-all"
+              >
+                ↑ Back to Top
+              </button>
             </div>
           )}
         </>
